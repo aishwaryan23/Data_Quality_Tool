@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Report — Run #{{ run.id }}{% endblock %}
+{% block page_title %}Validation Report{% endblock %}
+
+{% block content %}
+<!-- Summary -->
+<div class="card mb-24">
+    <div class="card-header">
+        <h2><i class="fas fa-file-alt" style="color: var(--primary); margin-right: 8px;"></i> Run #{{ run.id }} — {{ run.mapping.name }}</h2>
+        <div class="d-flex gap-8">
+            <button class="btn btn-sm btn-secondary" onclick="exportReport({{ run.id }}, 'excel')">
+                <i class="fas fa-file-excel"></i> Export Excel
+            </button>
+            <a href="{% url 'validations:list' %}" class="btn btn-sm btn-outline">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="report-summary mb-24">
+            <div class="report-metric">
+                <div class="metric-value">{{ run.total_checks }}</div>
+                <div class="metric-label">Total Checks</div>
+            </div>
+            <div class="report-metric pass">
+                <div class="metric-value">{{ run.passed_checks }}</div>
+                <div class="metric-label">Match</div>
+            </div>
+            <div class="report-metric fail">
+                <div class="metric-value">{{ run.failed_checks }}</div>
+                <div class="metric-label">Mismatch</div>
+            </div>
+            <div class="report-metric {% if run.pass_rate >= 90 %}pass{% elif run.pass_rate >= 70 %}{% else %}fail{% endif %}">
+                <div class="metric-value">{{ run.pass_rate }}%</div>
+                <div class="metric-label">Match Rate</div>
+            </div>
+        </div>
+
+        <div class="form-row mb-16">
+            <div>
+                <span class="text-muted">Status:</span>
+                <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% else %}badge-danger{% endif %}">
+                    {{ run.get_status_display }}
+                </span>
+            </div>
+            <div>
+                <span class="text-muted">Triggered By:</span>
+                <span class="fw-600">{{ run.triggered_by.get_full_name|default:run.triggered_by.username|default:"-" }}</span>
+                ({{ run.get_trigger_type_display }})
+            </div>
+            <div>
+                <span class="text-muted">Started:</span>
+                <span>{{ run.started_at|date:"d M Y H:i:s"|default:"-" }}</span>
+            </div>
+            <div>
+                <span class="text-muted">Completed:</span>
+                <span>{{ run.completed_at|date:"d M Y H:i:s"|default:"-" }}</span>
+            </div>
+        </div>
+
+        {% if run.error_message %}
+        <div class="alert alert-danger">
+            <strong>Error:</strong> {{ run.error_message }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Detailed Results -->
+<div class="card">
+    <div class="card-header">
+        <h2>Detailed Results</h2>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Table Name</th>
+                        <th>Column Name</th>
+                        <th>Source Validation Operation(operation choosen)</th>
+                        <th>Target Validation Operation (operation choosen)</th>
+                        <th>Result</th>
+                        <th>Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in results %}
+                    <tr>
+                        <td class="fw-500">{{ run.mapping.source_table.upper }}</td>
+                        <td class="fw-500">{{ result.column_mapping.source_column }}</td>
+                        <td><strong class="text-primary">{{ result.source_op_display }}</strong></td>
+                        <td><strong class="text-primary">{{ result.target_op_display }}</strong></td>
+                        <td>
+                            {% if result.is_match %}
+                                <span class="badge badge-success">MATCH</span>
+                            {% else %}
+                                <span class="badge badge-danger">MISMATCH</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted">{{ result.difference }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted p-24">No results available.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

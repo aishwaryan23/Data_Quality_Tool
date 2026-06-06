@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Monitor{% endblock %}
+{% block page_title %}Monitor Runs{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <h2><i class="fas fa-check-double" style="color: var(--primary); margin-right: 8px;"></i> Recent Monitor Runs</h2>
+        <form method="get" action="" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+            <input type="text" name="query" class="form-control" placeholder="Search pipeline name..." value="{{ query|default:'' }}" style="width: 240px; height: 38px; border-radius: 6px; margin: 0;">
+            <button type="submit" class="btn btn-primary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0 16px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                <i class="fas fa-search" style="margin-right: 6px;"></i> Search
+            </button>
+            {% if query %}
+            <a href="?" class="btn btn-secondary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #CBD5E1; color: #1E293B; border-radius: 6px; padding: 0 16px; font-weight: 500; font-size: 14px; text-decoration: none;">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Run #</th>
+                        <th>Pipeline</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Match / Mismatch</th>
+                        <th>Triggered By</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr>
+                        <td class="fw-600">#{{ run.id }}</td>
+                        <td>{{ run.mapping.name }}</td>
+                        <td>
+                            <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% elif run.status == 'failed' %}badge-danger{% elif run.status == 'running' %}badge-warning{% else %}badge-muted{% endif %}"
+                                  id="status-badge-{{ run.id }}">
+                                {{ run.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress-bar" style="width: 100px;">
+                                <div class="progress-fill" id="progress-fill-{{ run.id }}" style="width: {{ run.progress }}%;"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="text-success fw-600">{{ run.passed_checks }}</span> /
+                            <span class="text-danger fw-600">{{ run.failed_checks }}</span>
+                            <span class="text-muted">({{ run.total_checks }})</span>
+                        </td>
+                        <td>{{ run.triggered_by.get_full_name|default:run.triggered_by.username|default:"-" }}</td>
+                        <td>
+                            <span class="badge {% if run.trigger_type == 'manual' %}badge-info{% else %}badge-primary{% endif %}">
+                                {{ run.get_trigger_type_display }}
+                            </span>
+                        </td>
+                        <td>{{ run.created_at|date:"d M Y H:i" }}</td>
+                        <td>
+                            <div class="d-flex gap-8">
+                                {% if run.status == 'completed' or run.status == 'failed' %}
+                                <a href="{% url 'validations:report' run.id %}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-file-alt"></i> Report
+                                </a>
+                                {% elif run.status == 'running' %}
+                                <a href="{% url 'validations:progress' run.id %}" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-spinner fa-spin"></i> Progress
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-check-double"></i></div>
+                                <h3>{% if query %}No Results Found{% else %}No Monitor Runs Yet{% endif %}</h3>
+                                <p>{% if query %}No pipelines matching "{{ query }}" have validation runs.{% else %}Create a pipeline and trigger a monitor run to see results here.{% endif %}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

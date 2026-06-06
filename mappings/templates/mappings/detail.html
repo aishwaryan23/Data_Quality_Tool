@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Pipeline: {{ mapping.name }}{% endblock %}
+{% block page_title %}Pipeline Details{% endblock %}
+
+{% block content %}
+<div class="card mb-24">
+    <div class="card-header">
+        <h2><i class="fas fa-project-diagram" style="color: var(--primary); margin-right: 8px;"></i> {{ mapping.name }}</h2>
+        {% if user_profile.role != 'auditor' %}
+        <div class="d-flex gap-8">
+            <button class="btn btn-primary btn-sm" onclick="triggerValidation({{ mapping.id }})">
+                <i class="fas fa-play"></i> Run Monitor
+            </button>
+            <form method="post" action="{% url 'mappings:delete' mapping.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Delete this pipeline?')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if mapping.description %}<p class="text-muted mb-16">{{ mapping.description }}</p>{% endif %}
+
+        <div class="mapping-panel mb-24">
+            <div class="panel-source">
+                <div class="panel-header"><i class="fas fa-database"></i> Source</div>
+                <div class="panel-body">
+                    <p><strong>Connection:</strong> {{ mapping.source_connection.name }}</p>
+                    <p><strong>Type:</strong> {{ mapping.source_connection.get_connection_type_display }}</p>
+                    <p><strong>Schema:</strong> {{ mapping.source_schema|default:"N/A" }}</p>
+                    <p><strong>Table:</strong> {{ mapping.source_table }}</p>
+                </div>
+            </div>
+            <div class="panel-arrow"><i class="fas fa-arrow-right"></i></div>
+            <div class="panel-target">
+                <div class="panel-header"><i class="fas fa-bullseye"></i> Target</div>
+                <div class="panel-body">
+                    <p><strong>Connection:</strong> {{ mapping.target_connection.name }}</p>
+                    <p><strong>Type:</strong> {{ mapping.target_connection.get_connection_type_display }}</p>
+                    <p><strong>Schema:</strong> {{ mapping.target_schema|default:"N/A" }}</p>
+                    <p><strong>Table:</strong> {{ mapping.target_table }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Date Filter Info -->
+        {% if mapping.source_date_filter_type != 'none' or mapping.target_date_filter_type != 'none' or mapping.date_filter_type != 'none' %}
+        <div class="mb-24" style="background: var(--bg-input); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+            <h3 style="font-size: 1rem; color: var(--primary); font-weight: 600; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-calendar-alt"></i> Date Filter Configuration
+            </h3>
+            <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                {% if mapping.source_date_filter_type != 'none' %}
+                <div style="flex: 1; min-width: 250px;">
+                    <p style="margin: 4px 0;"><strong>Source Date Filter:</strong> {{ mapping.get_source_date_filter_type_display }} on Column: <code>{{ mapping.source_date_column }}</code></p>
+                    {% if mapping.source_date_filter_type == 'specific' %}
+                        <p style="margin: 4px 0;"><strong>Date:</strong> <code>{{ mapping.source_date_filter_start }}</code> (Operator: <code>{{ mapping.source_date_operator }}</code>)</p>
+                    {% elif mapping.source_date_filter_type == 'range' %}
+                        <p style="margin: 4px 0;"><strong>Range:</strong> <code>{{ mapping.source_date_filter_start }}</code> to <code>{{ mapping.source_date_filter_end }}</code></p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if mapping.target_date_filter_type != 'none' %}
+                <div style="flex: 1; min-width: 250px;">
+                    <p style="margin: 4px 0;"><strong>Target Date Filter:</strong> {{ mapping.get_target_date_filter_type_display }} on Column: <code>{{ mapping.target_date_column }}</code></p>
+                    {% if mapping.target_date_filter_type == 'specific' %}
+                        <p style="margin: 4px 0;"><strong>Date:</strong> <code>{{ mapping.target_date_filter_start }}</code> (Operator: <code>{{ mapping.target_date_operator }}</code>)</p>
+                    {% elif mapping.target_date_filter_type == 'range' %}
+                        <p style="margin: 4px 0;"><strong>Range:</strong> <code>{{ mapping.target_date_filter_start }}</code> to <code>{{ mapping.target_date_filter_end }}</code></p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if mapping.date_filter_type != 'none' %}
+                <div style="flex: 1; min-width: 250px;">
+                    <p style="margin: 4px 0;"><strong>General Date Filter:</strong> {{ mapping.get_date_filter_type_display }} on Column: <code>{{ mapping.date_filter_column }}</code></p>
+                    {% if mapping.date_filter_type == 'specific' %}
+                        <p style="margin: 4px 0;"><strong>Date:</strong> <code>{{ mapping.date_filter_start }}</code> (Operator: <code>{{ mapping.date_operator }}</code>)</p>
+                    {% elif mapping.date_filter_type == 'range' %}
+                        <p style="margin: 4px 0;"><strong>Range:</strong> <code>{{ mapping.date_filter_start }}</code> to <code>{{ mapping.date_filter_end }}</code></p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Column Mappings -->
+<div class="card">
+    <div class="card-header">
+        <h2>Column Pipelines ({{ column_mappings|length }})</h2>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source Column</th>
+                        <th>Source Type</th>
+                        <th></th>
+                        <th>Target Column</th>
+                        <th>Target Type</th>
+                        <th>Monitors</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cm in column_mappings %}
+                    <tr>
+                        <td class="fw-600">{{ cm.source_column }}</td>
+                        <td><span class="datatype-tag">{{ cm.source_datatype|default:"—" }}</span></td>
+                        <td style="text-align: center; color: var(--text-muted);"><i class="fas fa-arrow-right"></i></td>
+                        <td class="fw-600">{{ cm.target_column }}</td>
+                        <td><span class="datatype-tag">{{ cm.target_datatype|default:"—" }}</span></td>
+                        <td>
+                            {% for rule in cm.rules.all %}
+                                <span class="badge badge-primary" style="margin: 2px;">{{ rule.get_operation_display }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted p-24">No column mappings defined.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Workflow: {{ workflow.name }}{% endblock %}
+{% block page_title %}Workflow Details{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 720px;">
+    <div class="card-header">
+        <h2><i class="fas fa-clock" style="color: var(--primary); margin-right: 8px;"></i> {{ workflow.name }}</h2>
+        {% if user_profile.role != 'auditor' %}
+        <div class="d-flex gap-8">
+            <button class="btn btn-sm btn-primary" onclick="triggerWorkflow({{ workflow.id }})">
+                <i class="fas fa-play"></i> Trigger Now
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if workflow.description %}
+        <p class="text-muted mb-16">{{ workflow.description }}</p>
+        {% endif %}
+
+        <div class="form-row mb-16">
+            <div>
+                <span class="text-muted">Mapping:</span>
+                <a href="{% url 'mappings:detail' workflow.mapping.id %}" class="fw-600">{{ workflow.mapping.name }}</a>
+            </div>
+            <div>
+                <span class="text-muted">Schedule:</span>
+                <span class="badge badge-primary">{{ workflow.get_schedule_type_display }}</span>
+                {% if workflow.schedule_time %}at {{ workflow.schedule_time|time:"H:i" }}{% endif %}
+            </div>
+        </div>
+
+        <div class="form-row mb-16">
+            <div>
+                <span class="text-muted">Status:</span>
+                {% if workflow.is_active %}
+                    <span class="badge badge-success badge-dot">Active</span>
+                {% else %}
+                    <span class="badge badge-danger badge-dot">Inactive</span>
+                {% endif %}
+            </div>
+            <div>
+                <span class="text-muted">Last Run:</span>
+                <span>{{ workflow.last_run|date:"d M Y H:i"|default:"Never" }}</span>
+            </div>
+            <div>
+                <span class="text-muted">Created By:</span>
+                <span>{{ workflow.created_by.get_full_name|default:workflow.created_by.username }}</span>
+            </div>
+            <div>
+                <span class="text-muted">Created:</span>
+                <span>{{ workflow.created_at|date:"d M Y" }}</span>
+            </div>
+        </div>
+
+        {% if workflow.cron_expression %}
+        <div class="alert alert-info">
+            <strong>Cron:</strong> <code>{{ workflow.cron_expression }}</code>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

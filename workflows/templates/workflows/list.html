@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Workflows{% endblock %}
+{% block page_title %}Workflows{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-clock" style="color: var(--primary); margin-right: 8px;"></i> Workflows ({{ workflows|length }})</h2>
+        {% if user_profile.role != 'auditor' %}
+        <a href="{% url 'workflows:create' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> New Workflow
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% for workflow in workflows %}
+        <div class="schedule-card">
+            <div class="schedule-info">
+                <div class="schedule-icon">
+                    {% if workflow.schedule_type == 'manual' %}
+                        <i class="fas fa-hand-pointer"></i>
+                    {% elif workflow.schedule_type == 'daily' %}
+                        <i class="fas fa-calendar-day"></i>
+                    {% elif workflow.schedule_type == 'weekly' %}
+                        <i class="fas fa-calendar-week"></i>
+                    {% else %}
+                        <i class="fas fa-clock"></i>
+                    {% endif %}
+                </div>
+                <div class="schedule-details">
+                    <h4>{{ workflow.name }}</h4>
+                    <p>
+                        {{ workflow.mapping.name }} •
+                        {{ workflow.get_schedule_type_display }}
+                        {% if workflow.schedule_time %} at {{ workflow.schedule_time|time:"H:i" }}{% endif %}
+                        {% if workflow.last_run %} • Last run: {{ workflow.last_run|date:"d M H:i" }}{% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="schedule-actions">
+                {% if user_profile.role != 'auditor' %}
+                <label class="toggle-switch">
+                    <input type="checkbox" {% if workflow.is_active %}checked{% endif %}
+                           onchange="toggleWorkflow({{ workflow.id }}, this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+                <button class="btn btn-sm btn-primary" onclick="triggerWorkflow({{ workflow.id }})">
+                    <i class="fas fa-play"></i> Trigger
+                </button>
+                {% endif %}
+                <a href="{% url 'workflows:detail' workflow.id %}" class="btn btn-sm btn-outline">
+                    <i class="fas fa-eye"></i>
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <div class="empty-icon"><i class="fas fa-clock"></i></div>
+            <h3>No Workflows Yet</h3>
+            <p>Schedule automatic validations by creating a workflow.</p>
+            {% if user_profile.role != 'auditor' %}
+            <a href="{% url 'workflows:create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Create Workflow
+            </a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
