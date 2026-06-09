@@ -54,7 +54,13 @@
                             <span class="text-danger fw-600">{{ run.failed_checks }}</span>
                             <span class="text-muted">({{ run.total_checks }})</span>
                         </td>
-                        <td>{{ run.triggered_by.get_full_name|default:run.triggered_by.username|default:"-" }}</td>
+                        <td>
+                            {% if run.triggered_by %}
+                                {{ run.triggered_by.get_full_name|default:run.triggered_by.username }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </td>
                         <td>
                             <span class="badge {% if run.trigger_type == 'manual' %}badge-info{% else %}badge-primary{% endif %}">
                                 {{ run.get_trigger_type_display }}

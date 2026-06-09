@@ -89,43 +89,213 @@ class ValidationEngine:
 
     def _run_check(self, col_mapping, operation):
         """Run a single validation check and save the result."""
-        source_value = self._get_value(
-            self.source_engine,
-            self.mapping.source_schema,
-            self.mapping.source_table,
-            col_mapping.source_column,
-            operation,
-            is_source=True,
-        )
+        row_by_row_ops = ('equals_check', 'case_insensitive_check', 'contains_check', 'starts_with_check', 'ends_with_check', 'pattern_match')
+        
+        if operation in row_by_row_ops:
+            # Resolve source date filters
+            src_date_column = self.mapping.source_date_column if self.mapping.source_date_filter_type != 'none' else None
+            src_date_start = str(self.run.source_date_filter_start) if self.run.source_date_filter_start else None
+            src_date_end = str(self.run.source_date_filter_end) if self.run.source_date_filter_end else None
+            src_date_operator = getattr(self.mapping, 'source_date_operator', '=') if self.mapping.source_date_filter_type == 'specific' else None
+            # Fallbacks
+            if not src_date_column and self.mapping.date_filter_type != 'none':
+                src_date_column = self.mapping.date_filter_column
+                src_date_start = str(self.run.date_filter_start) if self.run.date_filter_start else None
+                src_date_end = str(self.run.date_filter_end) if self.run.date_filter_end else None
+                src_date_operator = getattr(self.mapping, 'date_operator', '=') if self.mapping.date_filter_type == 'specific' else None
 
-        target_value = self._get_value(
-            self.target_engine,
-            self.mapping.target_schema,
-            self.mapping.target_table,
-            col_mapping.target_column,
-            operation,
-            is_source=False,
-        )
+            # Resolve target date filters
+            tgt_date_column = self.mapping.target_date_column if self.mapping.target_date_filter_type != 'none' else None
+            tgt_date_start = str(self.run.target_date_filter_start) if self.run.target_date_filter_start else None
+            tgt_date_end = str(self.run.target_date_filter_end) if self.run.target_date_filter_end else None
+            tgt_date_operator = getattr(self.mapping, 'target_date_operator', '=') if self.mapping.target_date_filter_type == 'specific' else None
+            # Fallbacks
+            if not tgt_date_column and self.mapping.date_filter_type != 'none':
+                tgt_date_column = self.mapping.date_filter_column
+                tgt_date_start = str(self.run.date_filter_start) if self.run.date_filter_start else None
+                tgt_date_end = str(self.run.date_filter_end) if self.run.date_filter_end else None
+                tgt_date_operator = getattr(self.mapping, 'date_operator', '=') if self.mapping.date_filter_type == 'specific' else None
 
-        # Compare values
-        is_match = self._compare(source_value, target_value, operation)
-        difference = '0'
-        if is_match:
-            difference = '0'
-        elif source_value is None or target_value is None:
-            difference = 'N/A'
+            source_vals = self.source_engine.get_column_values(
+                self.mapping.source_schema,
+                self.mapping.source_table,
+                col_mapping.source_column,
+                src_date_column,
+                src_date_start,
+                src_date_end,
+                src_date_operator,
+            )
+            target_vals = self.target_engine.get_column_values(
+                self.mapping.target_schema,
+                self.mapping.target_table,
+                col_mapping.target_column,
+                tgt_date_column,
+                tgt_date_start,
+                tgt_date_end,
+                tgt_date_operator,
+            )
+
+            if operation == 'equals_check':
+                if len(source_vals) != len(target_vals):
+                    is_match = False
+                    difference = f"Row count mismatch: source={len(source_vals)}, target={len(target_vals)}"
+                else:
+                    is_match = True
+                    difference = '0'
+                    for i in range(len(source_vals)):
+                        if str(source_vals[i]) != str(target_vals[i]):
+                            is_match = False
+                            difference = f"Mismatch at row {i+1}: source='{source_vals[i]}' target='{target_vals[i]}'"
+                            break
+                source_value = 'true' if is_match else 'false'
+                target_value = 'true' if is_match else 'false'
+
+            elif operation == 'case_insensitive_check':
+                if len(source_vals) != len(target_vals):
+                    is_match = False
+                    difference = f"Row count mismatch: source={len(source_vals)}, target={len(target_vals)}"
+                else:
+                    is_match = True
+                    difference = '0'
+                    for i in range(len(source_vals)):
+                        if str(source_vals[i]).lower() != str(target_vals[i]).lower():
+                            is_match = False
+                            difference = f"Mismatch at row {i+1}: source='{source_vals[i]}' target='{target_vals[i]}'"
+                            break
+                source_value = 'true' if is_match else 'false'
+                target_value = 'true' if is_match else 'false'
+
+            else:
+                # Parameter-based checks (contains_check, starts_with_check, ends_with_check, pattern_match)
+                # Retrieve parameter from ValidationRun.parameters
+                param = self.run.parameters.get(f"{col_mapping.source_column}:{operation}")
+                if param is None:
+                    param = self.run.parameters.get(f"__all__:{operation}")
+
+                # Robust default parameters fallbacks
+                if param is None:
+                    if operation == 'contains_check':
+                        param = ' '
+                    elif operation == 'pattern_match':
+                        param = r'^[a-zA-Z0-9_\-\.\s@]+$'
+
+                def check_val(val, op, p):
+                    val_str = str(val)
+                    if op == 'contains_check':
+                        return p in val_str
+                    elif op == 'starts_with_check':
+                        if p:
+                            return val_str.startswith(p)
+                        else:
+                            return bool(val_str and val_str[0].isalpha())
+                    elif op == 'ends_with_check':
+                        if p:
+                            return val_str.endswith(p)
+                        else:
+                            return bool(val_str and val_str[-1].isalpha())
+                    elif op == 'pattern_match':
+                        import re
+                        pat = p or r'^[a-zA-Z0-9_\-\.\s@]+$'
+                        return bool(re.match(pat, val_str))
+                    return True
+
+                source_ok = True
+                source_error = None
+                for i, val in enumerate(source_vals):
+                    if not check_val(val, operation, param):
+                        source_ok = False
+                        source_error = f"Row {i+1} failed check (value='{val}')"
+                        break
+
+                target_ok = True
+                target_error = None
+                for i, val in enumerate(target_vals):
+                    if not check_val(val, operation, param):
+                        target_ok = False
+                        target_error = f"Row {i+1} failed check (value='{val}')"
+                        break
+
+                is_match = source_ok and target_ok
+                source_value = 'true' if source_ok else 'false'
+                target_value = 'true' if target_ok else 'false'
+
+                if is_match:
+                    difference = '0'
+                else:
+                    errs = []
+                    if not source_ok:
+                        errs.append(f"Source: {source_error}")
+                    if not target_ok:
+                        errs.append(f"Target: {target_error}")
+                    difference = "; ".join(errs)
+
         else:
-            try:
-                diff = float(source_value) - float(target_value)
-                if diff.is_integer():
-                    difference = str(int(diff))
-                else:
-                    difference = f"{diff:.2f}"
-            except (ValueError, TypeError):
-                if operation == 'data_type_check':
-                    difference = '0' if is_match else '1'
-                else:
-                    difference = '0' if str(source_value).strip() == str(target_value).strip() else '1'
+            # Traditional aggregated check logic
+            source_value = self._get_value(
+                self.source_engine,
+                self.mapping.source_schema,
+                self.mapping.source_table,
+                col_mapping.source_column,
+                operation,
+                is_source=True,
+            )
+
+            target_value = self._get_value(
+                self.target_engine,
+                self.mapping.target_schema,
+                self.mapping.target_table,
+                col_mapping.target_column,
+                operation,
+                is_source=False,
+            )
+
+            # Datatype formatting tweaks for length_sum_check, null_check, sum_length
+            int_ops = ('null_check', 'length_sum_check', 'sum_length', 'count', 'row_count', 'distinct_count', 'duplicate_check')
+            if operation in int_ops:
+                if source_value is not None:
+                    try:
+                        source_value = int(float(source_value))
+                    except (ValueError, TypeError):
+                        pass
+                if target_value is not None:
+                    try:
+                        target_value = int(float(target_value))
+                    except (ValueError, TypeError):
+                        pass
+
+            # Trim check formatting: Found / Not Found
+            if operation == 'trim_check':
+                # Original trim check returns the count of untrimmed rows
+                try:
+                    src_count = int(float(source_value)) if source_value is not None else 0
+                    source_value = 'Found' if src_count > 0 else 'Not Found'
+                except (ValueError, TypeError):
+                    source_value = 'Not Found'
+                try:
+                    tgt_count = int(float(target_value)) if target_value is not None else 0
+                    target_value = 'Found' if tgt_count > 0 else 'Not Found'
+                except (ValueError, TypeError):
+                    target_value = 'Not Found'
+
+            # Compare values
+            is_match = self._compare(source_value, target_value, operation)
+            difference = '0'
+            if is_match:
+                difference = '0'
+            elif source_value is None or target_value is None:
+                difference = 'N/A'
+            else:
+                try:
+                    diff = float(source_value) - float(target_value)
+                    if diff.is_integer():
+                        difference = str(int(diff))
+                    else:
+                        difference = f"{diff:.2f}"
+                except (ValueError, TypeError):
+                    if operation == 'data_type_check':
+                        difference = '0' if is_match else '1'
+                    else:
+                        difference = '0' if str(source_value).strip() == str(target_value).strip() else '1'
 
         result = ValidationResult.objects.create(
             run=self.run,

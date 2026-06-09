@@ -46,7 +46,13 @@
             </div>
             <div>
                 <span class="text-muted">Triggered By:</span>
-                <span class="fw-600">{{ run.triggered_by.get_full_name|default:run.triggered_by.username|default:"-" }}</span>
+                <span class="fw-600">
+                    {% if run.triggered_by %}
+                        {{ run.triggered_by.get_full_name|default:run.triggered_by.username }}
+                    {% else %}
+                        System
+                    {% endif %}
+                </span>
                 ({{ run.get_trigger_type_display }})
             </div>
             <div>

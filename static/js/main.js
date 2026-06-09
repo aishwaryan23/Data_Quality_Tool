@@ -499,20 +499,44 @@ function pollValidationProgress(runId) {
 function triggerValidation(mappingId) {
     if (!confirm('Are you sure you want to trigger this validation?')) return;
 
-    fetchWithCSRF(`/validations/api/trigger/${mappingId}/`, { method: 'POST' })
+    // First fetch if any parameter-based rules are active
+    fetch(`/validations/api/mapping/${mappingId}/rules-metadata/`)
         .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showToast('Validation triggered successfully!', 'success');
-                if (data.run_id) {
-                    pollValidationProgress(data.run_id);
+        .then(meta => {
+            let parameters = {};
+            if (meta.requires_parameters) {
+                for (const rule of meta.rules) {
+                    let promptMsg = `Enter input parameter for column "${rule.column}" (${rule.operation_display}):`;
+                    let userInput = prompt(promptMsg);
+                    if (userInput === null) {
+                        // User cancelled the prompt
+                        showToast('Validation run cancelled.', 'warning');
+                        return;
+                    }
+                    parameters[`${rule.column}:${rule.operation}`] = userInput;
                 }
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.error || 'Failed to trigger validation', 'error');
             }
+
+            // Trigger validation via POST sending the parameters
+            fetchWithCSRF(`/validations/api/trigger/${mappingId}/`, {
+                method: 'POST',
+                body: JSON.stringify({ parameters: parameters })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Validation triggered successfully!', 'success');
+                    if (data.run_id) {
+                        pollValidationProgress(data.run_id);
+                    }
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(data.error || 'Failed to trigger validation', 'error');
+                }
+            })
+            .catch(() => showToast('Network error', 'error'));
         })
-        .catch(() => showToast('Network error', 'error'));
+        .catch(() => showToast('Failed to check validation rules metadata', 'error'));
 }
 
 // ─── Trigger Workflow ───────────────────────────────────────────────────────
@@ -927,7 +951,7 @@ async function restoreMappingDraft(data) {
                             const selectAllRadio = document.getElementById('all-ops-select-all');
                             const deselectAllRadio = document.getElementById('all-ops-deselect-all');
                             if (selectAllRadio && deselectAllRadio) {
-                                selectAllRadio.checked = (ops.length === 10);
+                                selectAllRadio.checked = (ops.length === 19);
                                 deselectAllRadio.checked = (ops.length === 0);
                             }
                         }, 200);
@@ -1049,7 +1073,15 @@ const OP_LISTS = {
         { value: 'null_check', label: 'Null Check' },
         { value: 'length_sum_check', label: 'Length Check' },
         { value: 'sum_length', label: 'Sum Length' },
-        { value: 'duplicate_check', label: 'Duplicate Check' }
+        { value: 'duplicate_check', label: 'Duplicate Check' },
+        { value: 'equals_check', label: 'Equals Check' },
+        { value: 'case_insensitive_check', label: 'Case Insensitive Check' },
+        { value: 'trim_check', label: 'Trim Check' },
+        { value: 'contains_check', label: 'Contains Check' },
+        { value: 'starts_with_check', label: 'Starts With Check' },
+        { value: 'ends_with_check', label: 'Ends With Check' },
+        { value: 'pattern_match', label: 'Pattern Match' },
+        { value: 'data_type_check', label: 'Data Type Check' }
     ],
     INTEGER: [
         { value: 'null_check', label: 'Null Check' },
@@ -1057,7 +1089,9 @@ const OP_LISTS = {
         { value: 'avg', label: 'Average' },
         { value: 'min', label: 'Min' },
         { value: 'max', label: 'Max' },
-        { value: 'duplicate_check', label: 'Duplicate Check' }
+        { value: 'duplicate_check', label: 'Duplicate Check' },
+        { value: 'equals', label: 'Equals' },
+        { value: 'data_type_check', label: 'Data Type Check' }
     ],
     DATE: [
         { value: 'null_check', label: 'Null Check' },
@@ -1261,7 +1295,15 @@ function handleColumnSelectionChange() {
             { value: 'max', label: 'Max' },
             { value: 'min_date', label: 'Min Date' },
             { value: 'max_date', label: 'Max Date' },
-            { value: 'data_type_check', label: 'Data Type Check' }
+            { value: 'data_type_check', label: 'Data Type Check' },
+            { value: 'equals', label: 'Equals' },
+            { value: 'equals_check', label: 'Equals Check' },
+            { value: 'case_insensitive_check', label: 'Case Insensitive Check' },
+            { value: 'trim_check', label: 'Trim Check' },
+            { value: 'contains_check', label: 'Contains Check' },
+            { value: 'starts_with_check', label: 'Starts With Check' },
+            { value: 'ends_with_check', label: 'Ends With Check' },
+            { value: 'pattern_match', label: 'Pattern Match' }
         ];
 
         let html = `

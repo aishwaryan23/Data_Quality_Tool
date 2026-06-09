@@ -219,6 +219,7 @@
             </div>
 
             <input type="hidden" name="column_mappings_json" id="column-mappings-json" value="[]">
+            <input type="hidden" name="parameters" id="parameters-json" value="{}">
 
             <!-- New Separate Date Filter Settings -->
             <div class="card mb-24 date-filter-section" style="box-shadow: none; border: 1.5px solid var(--border-light); background: var(--bg-card); border-radius: var(--radius-lg);">
@@ -496,6 +497,39 @@ function validateQuickForm() {
             return false;
         }
     }
+
+    // Prompt for parameter-based operations
+    let parameters = {};
+    const needsParamOps = ['contains_check', 'starts_with_check', 'ends_with_check', 'pattern_match'];
+    for (const mapping of mappings) {
+        if (mapping.source_column === '__all__') {
+            const selectedOps = mapping.operations || [];
+            for (const op of selectedOps) {
+                if (needsParamOps.includes(op)) {
+                    let friendlyOp = op.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    let val = prompt(`You selected '${friendlyOp}' for All Columns. Please enter the input parameter value:`);
+                    if (val === null) {
+                        showToast('Validation run cancelled.', 'warning');
+                        return false;
+                    }
+                    parameters[`__all__:${op}`] = val;
+                }
+            }
+        } else {
+            for (const op of (mapping.operations || [])) {
+                if (needsParamOps.includes(op)) {
+                    let friendlyOp = op.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    let val = prompt(`Please enter parameter value for column "${mapping.source_column}" (${friendlyOp}):`);
+                    if (val === null) {
+                        showToast('Validation run cancelled.', 'warning');
+                        return false;
+                    }
+                    parameters[`${mapping.source_column}:${op}`] = val;
+                }
+            }
+        }
+    }
+    document.getElementById('parameters-json').value = JSON.stringify(parameters);
     
     return true;
 }
