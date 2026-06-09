@@ -49,25 +49,31 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
         self.assertIn('sum', int_ops)
         self.assertIn('avg', int_ops)
         self.assertNotIn('length_sum_check', int_ops)
-        self.assertIn('equals', int_ops)
+        self.assertNotIn('equals', int_ops)
+        self.assertIn('unique_check', int_ops)
+        self.assertIn('distinct_count', int_ops)
         self.assertIn('data_type_check', int_ops)
 
         str_ops = get_applicable_operations('VARCHAR')
         self.assertIn('length_sum_check', str_ops)
         self.assertIn('regex_check', str_ops)
         self.assertNotIn('sum', str_ops)
-        self.assertIn('equals_check', str_ops)
+        self.assertNotIn('equals_check', str_ops)
         self.assertIn('case_insensitive_check', str_ops)
         self.assertIn('trim_check', str_ops)
         self.assertIn('contains_check', str_ops)
-        self.assertIn('starts_with_check', str_ops)
-        self.assertIn('ends_with_check', str_ops)
+        self.assertNotIn('starts_with_check', str_ops)
+        self.assertNotIn('ends_with_check', str_ops)
         self.assertIn('pattern_match', str_ops)
+        self.assertIn('unique_check', str_ops)
+        self.assertIn('distinct_count', str_ops)
         self.assertIn('data_type_check', str_ops)
 
         date_ops = get_applicable_operations('DATE')
         self.assertIn('min_date', date_ops)
         self.assertIn('max_date', date_ops)
+        self.assertIn('unique_check', date_ops)
+        self.assertIn('distinct_count', date_ops)
         self.assertNotIn('sum', date_ops)
 
     def test_new_validation_queries_execution(self):
@@ -93,27 +99,16 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
             engine = ConnectorEngine(file_conn)
             
             # String checks
-            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'equals_check'), ' hello')
             self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'case_insensitive_check'), ' hello')
             self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'trim_check'), 1)
             self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'contains_check'), 1)
-            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'starts_with_check'), 3)
-            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'ends_with_check'), 4)
             self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'pattern_match'), 5)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'unique_check'), 5)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'distinct_count'), 5)
             
             # Numeric checks
-            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'int_col', 'equals'), 150)
-            
-            # Mock DB checks
-            db_conn = DataConnection.objects.create(
-                name='Temp Mock DB',
-                connection_type='sqlite',
-                host='dummy_mock_host',
-                created_by=self.user
-            )
-            db_engine = ConnectorEngine(db_conn)
-            self.assertEqual(db_engine.get_aggregation('main', 'tbl', 'val', 'equals'), 75000)
-            self.assertEqual(db_engine.get_aggregation('main', 'tbl', 'val', 'equals_check'), 'mock_value')
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'int_col', 'unique_check'), 5)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'int_col', 'distinct_count'), 5)
 
     def test_quick_validate_with_all_columns(self):
         # Authenticate client
@@ -517,9 +512,7 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
                 trigger_type='manual',
                 parameters={
                     'col:contains_check': 'pen',
-                    'col:starts_with_check': 'i',
-                    'col:ends_with_check': 'g',
-                    'col:pattern_match': '^[a-zA-Z\\s]+$',
+                    'col:pattern_match': '^[a-zA-Z]+$',
                 }
             )
             
@@ -544,12 +537,33 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
             self.assertEqual(res_contains.source_value, 'false')
             self.assertIn("Row 1 failed check", res_contains.difference)
             
-            # Test starts_with_check
-            res_starts = engine._run_check(col_map, 'starts_with_check')
-            self.assertFalse(res_starts.is_match)
+            # Test pattern_match cell by cell
+            res_pattern = engine._run_check(col_map, 'pattern_match')
+            self.assertFalse(res_pattern.is_match)
+            self.assertEqual(res_pattern.source_value, 'false')
+            self.assertEqual(res_pattern.target_value, 'true')
+            self.assertIn("Mismatch at row 1: source value 'Active ' does not match pattern", res_pattern.difference)
             
             # Test sum_length returns integers
             res_len = engine._run_check(col_map, 'sum_length')
             self.assertEqual(res_len.source_value, '22')
             self.assertEqual(res_len.target_value, '21')
+
+    def test_delete_validation_run_view(self):
+        self.client.login(username='testuser', password='password123')
+        mapping = Mapping.objects.create(
+            name='Delete Map',
+            source_connection=self.source_conn,
+            target_connection=self.target_conn,
+            created_by=self.user
+        )
+        run = ValidationRun.objects.create(
+            mapping=mapping,
+            status='completed',
+            triggered_by=self.user
+        )
+        self.assertEqual(ValidationRun.objects.count(), 1)
+        response = self.client.post(reverse('validations:delete', args=[run.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ValidationRun.objects.count(), 0)
 

@@ -37,13 +37,13 @@ def get_datatype_category(type_str, name_str=''):
 
 def get_applicable_operations(category):
     if category == 'INTEGER':
-        return ['null_check', 'sum', 'avg', 'min', 'max', 'range_check', 'duplicate_check', 'count', 'row_count', 'equals', 'data_type_check']
+        return ['null_check', 'sum', 'avg', 'min', 'max', 'range_check', 'duplicate_check', 'unique_check', 'distinct_count', 'count', 'row_count', 'data_type_check']
     elif category == 'DATE':
-        return ['min_date', 'max_date', 'null_check', 'duplicate_check', 'count', 'row_count']
+        return ['min_date', 'max_date', 'null_check', 'duplicate_check', 'unique_check', 'distinct_count', 'count', 'row_count']
     elif category == 'BOOLEAN':
-        return ['null_check', 'count', 'row_count', 'duplicate_check']
+        return ['null_check', 'count', 'row_count', 'duplicate_check', 'unique_check', 'distinct_count']
     else: # VARCHAR
-        return ['null_check', 'length_sum_check', 'sum_length', 'regex_check', 'duplicate_check', 'unique_check', 'distinct_count', 'row_count', 'count', 'equals_check', 'case_insensitive_check', 'trim_check', 'contains_check', 'starts_with_check', 'ends_with_check', 'pattern_match', 'data_type_check']
+        return ['null_check', 'length_sum_check', 'sum_length', 'regex_check', 'duplicate_check', 'unique_check', 'distinct_count', 'row_count', 'count', 'case_insensitive_check', 'trim_check', 'contains_check', 'pattern_match', 'data_type_check']
 
 @login_required
 @contributor_or_admin_required

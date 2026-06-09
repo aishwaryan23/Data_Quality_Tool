@@ -165,8 +165,51 @@ class ValidationEngine:
                 source_value = 'true' if is_match else 'false'
                 target_value = 'true' if is_match else 'false'
 
+            elif operation == 'pattern_match':
+                param = self.run.parameters.get(f"{col_mapping.source_column}:pattern_match")
+                if param is None:
+                    param = self.run.parameters.get("__all__:pattern_match")
+                pat = param or r'^[a-zA-Z0-9_\-\.\s@]+$'
+
+                import re
+                def check_val(val, p):
+                    try:
+                        return bool(re.match(p, str(val)))
+                    except Exception:
+                        try:
+                            return bool(re.match(r'^[a-zA-Z0-9_\-\.\s@]+$', str(val)))
+                        except Exception:
+                            return False
+
+                if len(source_vals) != len(target_vals):
+                    is_match = False
+                    difference = f"Row count mismatch: source={len(source_vals)}, target={len(target_vals)}"
+                    source_value = 'false'
+                    target_value = 'false'
+                else:
+                    is_match = True
+                    difference = '0'
+                    source_ok = True
+                    target_ok = True
+                    for i in range(len(source_vals)):
+                        s_ok = check_val(source_vals[i], pat)
+                        t_ok = check_val(target_vals[i], pat)
+                        if not s_ok or not t_ok:
+                            is_match = False
+                            if not s_ok and not t_ok:
+                                difference = f"Mismatch at row {i+1}: source '{source_vals[i]}' and target '{target_vals[i]}' do not match pattern"
+                            elif not s_ok:
+                                difference = f"Mismatch at row {i+1}: source value '{source_vals[i]}' does not match pattern"
+                            else:
+                                difference = f"Mismatch at row {i+1}: target value '{target_vals[i]}' does not match pattern"
+                            source_ok = source_ok and s_ok
+                            target_ok = target_ok and t_ok
+                            break
+                    source_value = 'true' if source_ok else 'false'
+                    target_value = 'true' if target_ok else 'false'
+
             else:
-                # Parameter-based checks (contains_check, starts_with_check, ends_with_check, pattern_match)
+                # Parameter-based checks (contains_check, starts_with_check, ends_with_check)
                 # Retrieve parameter from ValidationRun.parameters
                 param = self.run.parameters.get(f"{col_mapping.source_column}:{operation}")
                 if param is None:
@@ -176,8 +219,6 @@ class ValidationEngine:
                 if param is None:
                     if operation == 'contains_check':
                         param = ' '
-                    elif operation == 'pattern_match':
-                        param = r'^[a-zA-Z0-9_\-\.\s@]+$'
 
                 def check_val(val, op, p):
                     val_str = str(val)
@@ -193,10 +234,6 @@ class ValidationEngine:
                             return val_str.endswith(p)
                         else:
                             return bool(val_str and val_str[-1].isalpha())
-                    elif op == 'pattern_match':
-                        import re
-                        pat = p or r'^[a-zA-Z0-9_\-\.\s@]+$'
-                        return bool(re.match(pat, val_str))
                     return True
 
                 source_ok = True
@@ -250,7 +287,7 @@ class ValidationEngine:
             )
 
             # Datatype formatting tweaks for length_sum_check, null_check, sum_length
-            int_ops = ('null_check', 'length_sum_check', 'sum_length', 'count', 'row_count', 'distinct_count', 'duplicate_check')
+            int_ops = ('null_check', 'length_sum_check', 'sum_length', 'count', 'row_count', 'distinct_count', 'duplicate_check', 'unique_check')
             if operation in int_ops:
                 if source_value is not None:
                     try:

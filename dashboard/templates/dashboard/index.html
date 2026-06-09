@@ -500,7 +500,7 @@ function validateQuickForm() {
 
     // Prompt for parameter-based operations
     let parameters = {};
-    const needsParamOps = ['contains_check', 'starts_with_check', 'ends_with_check', 'pattern_match'];
+    const needsParamOps = ['contains_check', 'pattern_match'];
     for (const mapping of mappings) {
         if (mapping.source_column === '__all__') {
             const selectedOps = mapping.operations || [];
